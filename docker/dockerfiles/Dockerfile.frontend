@@ -2,13 +2,19 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Build arguments for cache busting
+ARG BUILD_DATE
+ARG COMMIT_SHA
+ENV BUILD_DATE=$BUILD_DATE
+ENV COMMIT_SHA=$COMMIT_SHA
+
 # Copy package files
 COPY frontend/package*.json ./
 
 # Install dependencies
 RUN npm install
 
-# Copy source code
+# Copy source code (this layer will be invalidated when code changes)
 COPY frontend/ ./
 
 # Build argument for API URL

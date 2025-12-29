@@ -178,7 +178,13 @@ jobs:
               
               # Step 1: Build new images first (old containers keep running)
               echo "🏗️  Building new images (containers still running)..."
-              docker-compose -f docker/compose/docker-compose.prod.yml build --quiet --parallel 2>/dev/null || docker-compose -f docker/compose/docker-compose.prod.yml build --parallel
+              # Get latest commit SHA for cache busting
+              COMMIT_SHA=$(git rev-parse --short HEAD)
+              # Build with commit SHA as build arg to invalidate cache on code changes
+              docker-compose -f docker/compose/docker-compose.prod.yml build \
+                --build-arg BUILD_DATE=$(date +%s) \
+                --build-arg COMMIT_SHA=$COMMIT_SHA \
+                --parallel 2>&1 | tail -20
               
               # Step 2: Rolling update - docker-compose up does rolling update automatically
               # It starts new containers, then stops old ones (zero downtime)
@@ -190,8 +196,13 @@ jobs:
               docker container prune -f > /dev/null 2>&1 || true
             else
               echo "📦 First deployment - Full setup"
-              # Build with cache
-              docker-compose -f docker/compose/docker-compose.prod.yml build --parallel || docker-compose -f docker-compose.prod.yml build --parallel
+              # Get latest commit SHA for cache busting
+              COMMIT_SHA=$(git rev-parse --short HEAD)
+              # Build with commit SHA as build arg to ensure consistency
+              docker-compose -f docker/compose/docker-compose.prod.yml build \
+                --build-arg BUILD_DATE=$(date +%s) \
+                --build-arg COMMIT_SHA=$COMMIT_SHA \
+                --parallel || docker-compose -f docker-compose.prod.yml build --parallel
               # Start all containers
               docker-compose -f docker/compose/docker-compose.prod.yml up -d || docker-compose -f docker-compose.prod.yml up -d
             fi
