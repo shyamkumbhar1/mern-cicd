@@ -131,10 +131,10 @@ jobs:
               echo "📦 Containers running - Quick update mode"
               # Stop only frontend (if only frontend changed)
               docker stop mern-frontend 2>/dev/null || true
-              # Rebuild only frontend (fastest - uses cache)
-              docker-compose -f docker/compose/docker-compose.prod.yml build frontend || docker-compose -f docker-compose.prod.yml build frontend
-              # Restart frontend
-              docker-compose -f docker/compose/docker-compose.prod.yml up -d frontend || docker-compose -f docker-compose.prod.yml up -d frontend
+              # Rebuild only frontend (fastest - uses cache, no progress output for speed)
+              docker-compose -f docker/compose/docker-compose.prod.yml build --quiet frontend 2>/dev/null || docker-compose -f docker/compose/docker-compose.prod.yml build frontend
+              # Restart frontend (no recreate, faster)
+              docker-compose -f docker/compose/docker-compose.prod.yml up -d --no-deps frontend || docker-compose -f docker-compose.prod.yml up -d --no-deps frontend
             else
               echo "📦 First deployment - Full setup"
               # Stop existing containers
@@ -146,8 +146,12 @@ jobs:
               docker-compose -f docker/compose/docker-compose.prod.yml up -d || docker-compose -f docker-compose.prod.yml up -d
             fi
             
-            # Wait for containers to start
-            sleep 5
+            # Quick verification (no wait for fast mode)
+            if echo "${{ github.event.head_commit.message }}" | grep -q "\[fast\]"; then
+              echo "⚡ Fast mode - skipping wait"
+            else
+              sleep 5
+            fi
             
             # Verify containers are running
             echo "📊 Container status:"
@@ -157,10 +161,15 @@ jobs:
       - name: Quick Health Check
         run: |
           echo "🔍 Quick health check..."
-          # For frontend-only changes, skip backend health check
-          if echo "${{ github.event.head_commit.message }}" | grep -q "\[frontend\]\|\[ui\]"; then
-            echo "✅ Frontend-only change - skipping backend health check"
-            sleep 5
+          # For fast mode or frontend-only changes, minimal wait
+          if echo "${{ github.event.head_commit.message }}" | grep -q "\[fast\]\|\[frontend\]\|\[ui\]"; then
+            echo "⚡ Fast mode - minimal health check"
+            sleep 3
+            if curl -f -s --max-time 3 http://${{ env.AWS_EC2_IP }}:3000/health > /dev/null 2>&1; then
+              echo "✅ Backend is ready!"
+            else
+              echo "⚠️  Backend may still be starting (normal for fast mode)"
+            fi
           else
             sleep 15
             if curl -f -s --max-time 5 http://${{ env.AWS_EC2_IP }}:3000/health > /dev/null 2>&1; then
