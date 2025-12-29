@@ -157,12 +157,18 @@ jobs:
       - name: Quick Health Check
         run: |
           echo "🔍 Quick health check..."
-          sleep 20
-          if curl -f -s --max-time 5 http://${{ env.AWS_EC2_IP }}:3000/health > /dev/null 2>&1; then
-            echo "✅ Backend health check passed!"
+          # For frontend-only changes, skip backend health check
+          if echo "${{ github.event.head_commit.message }}" | grep -q "\[frontend\]\|\[ui\]"; then
+            echo "✅ Frontend-only change - skipping backend health check"
+            sleep 5
           else
-            echo "⚠️  Health check skipped (backend might still be starting)"
-            echo "💡 Check manually: http://${{ env.AWS_EC2_IP }}:3000/health"
+            sleep 15
+            if curl -f -s --max-time 5 http://${{ env.AWS_EC2_IP }}:3000/health > /dev/null 2>&1; then
+              echo "✅ Backend health check passed!"
+            else
+              echo "⚠️  Health check skipped (backend might still be starting)"
+              echo "💡 Check manually: http://${{ env.AWS_EC2_IP }}:3000/health"
+            fi
           fi
       
       - name: Open Security Group Ports
