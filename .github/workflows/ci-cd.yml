@@ -123,7 +123,14 @@ jobs:
             
             # Start containers
             echo "🚀 Starting containers..."
-            docker-compose -f docker/compose/docker-compose.prod.yml up -d || docker-compose -f docker-compose.prod.yml up -d
+            docker-compose -f docker/compose/docker-compose.prod.yml up -d --force-recreate || docker-compose -f docker-compose.prod.yml up -d --force-recreate
+            
+            # Wait for containers to start
+            sleep 5
+            
+            # Verify containers are running
+            echo "📊 Container status:"
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
           EOF
       
       - name: Health Check
