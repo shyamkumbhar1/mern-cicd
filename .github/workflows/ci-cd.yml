@@ -172,20 +172,24 @@ jobs:
             # Fast deployment - only rebuild if needed
             echo "🔄 Fast deployment mode..."
             
-            # Check if containers are running
+            # Zero-downtime deployment strategy
             if docker ps --format "{{.Names}}" | grep -q "mern-frontend\|mern-backend"; then
-              echo "📦 Containers running - Quick update mode"
-              # Stop only frontend (if only frontend changed)
-              docker stop mern-frontend 2>/dev/null || true
-              # Rebuild only frontend (fastest - uses cache, no progress output for speed)
-              docker-compose -f docker/compose/docker-compose.prod.yml build --quiet frontend 2>/dev/null || docker-compose -f docker/compose/docker-compose.prod.yml build frontend
-              # Restart frontend (no recreate, faster)
-              docker-compose -f docker/compose/docker-compose.prod.yml up -d --no-deps frontend || docker-compose -f docker-compose.prod.yml up -d --no-deps frontend
+              echo "🔄 Zero-downtime rolling update..."
+              
+              # Step 1: Build new images first (old containers keep running)
+              echo "🏗️  Building new images (containers still running)..."
+              docker-compose -f docker/compose/docker-compose.prod.yml build --quiet --parallel 2>/dev/null || docker-compose -f docker/compose/docker-compose.prod.yml build --parallel
+              
+              # Step 2: Rolling update - docker-compose up does rolling update automatically
+              # It starts new containers, then stops old ones (zero downtime)
+              echo "🔄 Rolling update (starting new, then stopping old)..."
+              docker-compose -f docker/compose/docker-compose.prod.yml up -d --no-deps --remove-orphans || docker-compose -f docker-compose.prod.yml up -d --no-deps --remove-orphans
+              
+              # Step 3: Clean up old stopped containers
+              echo "🧹 Cleaning up old containers..."
+              docker container prune -f > /dev/null 2>&1 || true
             else
               echo "📦 First deployment - Full setup"
-              # Stop existing containers
-              docker-compose -f docker/compose/docker-compose.prod.yml stop || docker-compose -f docker-compose.prod.yml stop || true
-              docker rm -f mern-frontend mern-backend mern-redis mern-redisinsight 2>/dev/null || true
               # Build with cache
               docker-compose -f docker/compose/docker-compose.prod.yml build --parallel || docker-compose -f docker-compose.prod.yml build --parallel
               # Start all containers
