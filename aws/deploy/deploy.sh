@@ -63,7 +63,7 @@ ssh -i $KEY_FILE ubuntu@$PUBLIC_IP << 'ENDSSH' || DEPLOY_ERROR=1
   # Don't use set -e - let individual commands handle errors
   # set -e  # Removed - too strict, causes false failures
   
-  cd ~/MERN
+  cd $AWS_REMOTE_PATH
   
   # Update system
   echo "📦 Updating system..."
