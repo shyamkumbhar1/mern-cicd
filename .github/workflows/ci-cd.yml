@@ -30,17 +30,16 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
       
       - name: Install Backend Dependencies
         run: |
           cd backend
-          npm ci || npm install
+          npm install
       
       - name: Install Frontend Dependencies
         run: |
           cd frontend
-          npm ci || npm install
+          npm install
       
       - name: Run Backend Tests
         run: |
