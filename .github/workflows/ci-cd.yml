@@ -99,10 +99,30 @@ jobs:
       - name: Deploy to Production
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.AWS_USER }}@${{ env.AWS_EC2_IP }} << 'EOF'
-            cd ~/MERN-prod || cd ~/MERN
-            git pull origin main || true
-            docker-compose -f docker/compose/docker-compose.prod.yml down || docker-compose -f docker-compose.prod.yml down
+            # Setup project directory if it doesn't exist
+            if [ ! -d ~/MERN-prod ]; then
+              echo "📦 Cloning repository..."
+              git clone https://github.com/shyamkumbhar1/mern-cicd-new.git ~/MERN-prod
+              cd ~/MERN-prod
+            else
+              cd ~/MERN-prod
+              echo "🔄 Pulling latest changes..."
+              git pull origin main || true
+            fi
+            
+            # Ensure Docker is running
+            sudo systemctl start docker || true
+            
+            # Stop existing containers
+            echo "🛑 Stopping existing containers..."
+            docker-compose -f docker/compose/docker-compose.prod.yml down || docker-compose -f docker-compose.prod.yml down || true
+            
+            # Build containers
+            echo "🏗️  Building containers..."
             docker-compose -f docker/compose/docker-compose.prod.yml build || docker-compose -f docker-compose.prod.yml build
+            
+            # Start containers
+            echo "🚀 Starting containers..."
             docker-compose -f docker/compose/docker-compose.prod.yml up -d || docker-compose -f docker-compose.prod.yml up -d
           EOF
       
