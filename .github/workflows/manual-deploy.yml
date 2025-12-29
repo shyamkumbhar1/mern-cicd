@@ -1,0 +1,59 @@
+name: Manual Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - production
+          - dev
+          - pre-prod
+
+env:
+  AWS_EC2_IP: 51.21.127.4
+  AWS_USER: ubuntu
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.AWS_EC2_IP }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy
+        run: |
+          ENV=${{ github.event.inputs.environment }}
+          if [ "$ENV" = "production" ]; then
+            REMOTE_PATH="~/MERN-prod"
+            COMPOSE_FILE="docker/compose/docker-compose.prod.yml"
+            BRANCH="main"
+          elif [ "$ENV" = "dev" ]; then
+            REMOTE_PATH="~/MERN-dev"
+            COMPOSE_FILE="docker/compose/docker-compose.dev.yml"
+            BRANCH="develop"
+          else
+            REMOTE_PATH="~/MERN-preprod"
+            COMPOSE_FILE="docker/compose/docker-compose.preprod.yml"
+            BRANCH="pre-prod"
+          fi
+          
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.AWS_USER }}@${{ env.AWS_EC2_IP }} << EOF
+            cd $REMOTE_PATH || cd ~/MERN
+            git pull origin $BRANCH || true
+            docker-compose -f $COMPOSE_FILE down || docker-compose -f docker-compose.prod.yml down
+            docker-compose -f $COMPOSE_FILE build || docker-compose -f docker-compose.prod.yml build
+            docker-compose -f $COMPOSE_FILE up -d || docker-compose -f docker-compose.prod.yml up -d
+          EOF
+

@@ -1,22 +1,19 @@
 #!/bin/bash
 
-# Quick Update Script (for small code changes)
-# Fast: Only sync + restart, no rebuild
+# Load AWS configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config.sh"
 
-PUBLIC_IP="51.21.127.4"
-KEY_FILE="/home/india/shared/solominds/MERN/server-practic.pem"
-PROJECT_PATH="/home/india/shared/solominds/MERN"
+# Use config variables
+PUBLIC_IP="$AWS_PUBLIC_IP"
+KEY_FILE="$AWS_KEY_FILE"
+PROJECT_PATH="$AWS_PROJECT_PATH"
 
 echo "🔄 Quick Update (Fast Mode - No Rebuild)..."
 echo "📍 Instance IP: $PUBLIC_IP"
 
 # Check key file
-if [ ! -f "$KEY_FILE" ]; then
-  echo "❌ Key file not found: $KEY_FILE"
-  exit 1
-fi
-
-chmod 400 $KEY_FILE
+check_key_file
 
 # Sync only changed files (fast - rsync)
 echo "📦 Syncing changed files..."
@@ -33,11 +30,11 @@ ssh -i $KEY_FILE ubuntu@$PUBLIC_IP << 'ENDSSH'
   cd ~/MERN
   
   # Restart containers (fast - no rebuild)
-  docker-compose -f docker/docker-compose.prod.yml restart
-  
-  # Quick status
-  sleep 3
-  docker-compose -f docker/docker-compose.prod.yml ps
+      docker-compose -f docker/compose/docker-compose.prod.yml restart
+      
+      # Quick status
+      sleep 3
+      docker-compose -f docker/compose/docker-compose.prod.yml ps
   
   echo "✅ Quick update complete!"
 ENDSSH

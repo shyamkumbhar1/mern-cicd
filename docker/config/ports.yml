@@ -1,0 +1,259 @@
+# Port Configuration for MERN Stack
+# This file tracks all ports used across different environments
+# Last Updated: December 2025
+
+environments:
+  local:
+    description: "Local development environment"
+    server_ip: "localhost"
+    services:
+      frontend:
+        host_port: 3001
+        container_port: 80
+        url: "http://localhost:3001"
+        purpose: "React Frontend Application"
+        container_name: "mern-frontend"
+      
+      backend:
+        host_port: 3000
+        container_port: 3000
+        url: "http://localhost:3000"
+        purpose: "Node.js Backend API"
+        container_name: "mern-backend"
+        health_check: "http://localhost:3000/health"
+      
+      redis:
+        host_port: 6379
+        container_port: 6379
+        url: "redis://localhost:6379"
+        purpose: "Redis Cache Server"
+        container_name: "mern-redis"
+      
+      redisinsight:
+        host_port: 8001
+        container_port: 5540
+        url: "http://localhost:8001"
+        purpose: "RedisInsight UI for Redis Management"
+        container_name: "mern-redisinsight"
+
+  dev:
+    description: "Development server on AWS"
+    server_ip: "51.21.127.4"
+    remote_path: "~/MERN-dev"
+    services:
+      frontend:
+        host_port: 3001
+        container_port: 80
+        url: "http://51.21.127.4:3001"
+        purpose: "React Frontend Application (Development)"
+        container_name: "mern-frontend-dev"
+      
+      backend:
+        host_port: 3000
+        container_port: 3000
+        url: "http://51.21.127.4:3000"
+        purpose: "Node.js Backend API (Development)"
+        container_name: "mern-backend-dev"
+        health_check: "http://51.21.127.4:3000/health"
+      
+      redis:
+        host_port: 6379
+        container_port: 6379
+        url: "redis://51.21.127.4:6379"
+        purpose: "Redis Cache Server (Development)"
+        container_name: "mern-redis-dev"
+      
+      redisinsight:
+        host_port: 8001
+        container_port: 5540
+        url: "http://51.21.127.4:8001"
+        purpose: "RedisInsight UI for Redis Management (Development)"
+        container_name: "mern-redisinsight-dev"
+
+  preprod:
+    description: "Pre-Production (Staging) server on AWS"
+    server_ip: "51.21.127.4"
+    remote_path: "~/MERN-preprod"
+    services:
+      frontend:
+        host_port: 8080
+        container_port: 80
+        url: "http://51.21.127.4:8080"
+        purpose: "React Frontend Application (Pre-Production)"
+        container_name: "mern-frontend-preprod"
+      
+      backend:
+        host_port: 4000
+        container_port: 3000
+        url: "http://51.21.127.4:4000"
+        purpose: "Node.js Backend API (Pre-Production)"
+        container_name: "mern-backend-preprod"
+        health_check: "http://51.21.127.4:4000/health"
+      
+      redis:
+        host_port: 6380
+        container_port: 6379
+        url: "redis://51.21.127.4:6380"
+        purpose: "Redis Cache Server (Pre-Production)"
+        container_name: "mern-redis-preprod"
+      
+      redisinsight:
+        host_port: 8002
+        container_port: 5540
+        url: "http://51.21.127.4:8002"
+        purpose: "RedisInsight UI for Redis Management (Pre-Production)"
+        container_name: "mern-redisinsight-preprod"
+
+  production:
+    description: "Production server on AWS"
+    server_ip: "51.21.127.4"
+    remote_path: "~/MERN-prod"
+    services:
+      frontend:
+        host_port: 80
+        container_port: 80
+        url: "http://51.21.127.4"
+        purpose: "React Frontend Application (Production)"
+        container_name: "mern-frontend"
+      
+      backend:
+        host_port: 3000
+        container_port: 3000
+        url: "http://51.21.127.4:3000"
+        purpose: "Node.js Backend API (Production)"
+        container_name: "mern-backend"
+        health_check: "http://51.21.127.4:3000/health"
+      
+      redis:
+        host_port: null
+        container_port: 6379
+        url: "redis://redis:6379"
+        purpose: "Redis Cache Server (Internal Network)"
+        container_name: "mern-redis"
+        note: "Not exposed externally, only accessible within Docker network"
+      
+      redisinsight:
+        host_port: 8001
+        container_port: 5540
+        url: "http://51.21.127.4:8001"
+        purpose: "RedisInsight UI for Redis Management"
+        container_name: "mern-redisinsight"
+
+# Port Summary - Quick Reference
+port_summary:
+  - port: 80
+    used_by: ["production-frontend"]
+    description: "Standard HTTP port for production frontend"
+    environments: ["production"]
+  
+  - port: 3000
+    used_by: ["local-backend", "dev-backend", "production-backend"]
+    description: "Backend API port"
+    environments: ["local", "dev", "production"]
+  
+  - port: 3001
+    used_by: ["local-frontend", "dev-frontend"]
+    description: "Frontend port for local and dev environments"
+    environments: ["local", "dev"]
+  
+  - port: 4000
+    used_by: ["preprod-backend"]
+    description: "Backend API port for pre-production"
+    environments: ["preprod"]
+  
+  - port: 6379
+    used_by: ["local-redis", "dev-redis"]
+    description: "Redis default port"
+    environments: ["local", "dev"]
+  
+  - port: 6380
+    used_by: ["preprod-redis"]
+    description: "Redis port for pre-production"
+    environments: ["preprod"]
+  
+  - port: 8001
+    used_by: ["local-redisinsight", "dev-redisinsight", "production-redisinsight"]
+    description: "RedisInsight UI port"
+    environments: ["local", "dev", "production"]
+  
+  - port: 8002
+    used_by: ["preprod-redisinsight"]
+    description: "RedisInsight UI port for pre-production"
+    environments: ["preprod"]
+  
+  - port: 8080
+    used_by: ["preprod-frontend"]
+    description: "Frontend port for pre-production"
+    environments: ["preprod"]
+
+# Reserved ports for future use
+reserved_ports:
+  - port: 5000
+    reserved_for: "Future project - Admin Panel"
+    status: "available"
+  
+  - port: 8003
+    reserved_for: "Future project - RedisInsight (Other)"
+    status: "available"
+  
+  - port: 9000
+    reserved_for: "Future project - Monitoring"
+    status: "available"
+
+# Port conflicts check
+# Use this section to track potential conflicts
+conflicts:
+  - note: "Port 80 is standard HTTP - use only for production frontend"
+  - note: "Port 3000 is used by backend in all environments"
+  - note: "Port 6379 is Redis default - avoid using for other services"
+
+# Security Group Ports (AWS)
+security_group_ports:
+  all_environments:
+    - port: 22
+      protocol: "tcp"
+      description: "SSH Access"
+      source: "0.0.0.0/0"
+  
+  dev:
+    - port: 3001
+      protocol: "tcp"
+      description: "Dev Frontend"
+      source: "0.0.0.0/0"
+    - port: 3000
+      protocol: "tcp"
+      description: "Dev Backend"
+      source: "0.0.0.0/0"
+    - port: 8001
+      protocol: "tcp"
+      description: "Dev RedisInsight"
+      source: "0.0.0.0/0"
+  
+  preprod:
+    - port: 8080
+      protocol: "tcp"
+      description: "Pre-prod Frontend"
+      source: "0.0.0.0/0"
+    - port: 4000
+      protocol: "tcp"
+      description: "Pre-prod Backend"
+      source: "0.0.0.0/0"
+    - port: 8002
+      protocol: "tcp"
+      description: "Pre-prod RedisInsight"
+      source: "0.0.0.0/0"
+  
+  production:
+    - port: 80
+      protocol: "tcp"
+      description: "Production Frontend HTTP"
+      source: "0.0.0.0/0"
+    - port: 3000
+      protocol: "tcp"
+      description: "Production Backend API"
+      source: "0.0.0.0/0"
+    - port: 8001
+      protocol: "tcp"
+      description: "Production RedisInsight UI"
+      source: "0.0.0.0/0"
+

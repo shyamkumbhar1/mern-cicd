@@ -27,9 +27,16 @@ MERN/
 │   ├── package.json
 │   ├── Dockerfile
 │   └── nginx.conf
-├── docker-compose.yml          # Local development
-├── docker-compose.prod.yml    # Production (AWS)
-├── deploy.sh                   # Deployment script
+├── docker/
+│   ├── docker-compose.yml      # Local development
+│   ├── docker-compose.prod.yml # Production (AWS)
+│   ├── ports.yml               # Port configuration reference
+│   ├── PORTS.md                # Port documentation
+│   └── show-ports.sh           # Port display script
+├── aws/                        # AWS deployment scripts
+│   ├── config.sh
+│   ├── deploy.sh
+│   └── ...
 ├── .env                        # Local environment
 └── .env.production             # Production environment
 ```
@@ -61,6 +68,13 @@ MERN/
    - Frontend: http://localhost:3001
    - Backend API: http://localhost:3000
    - Health Check: http://localhost:3000/health
+   - RedisInsight: http://localhost:8001
+
+5. **View port configuration:**
+   ```bash
+   ./docker/show-ports.sh
+   # Or check: docker/ports.yml or docker/PORTS.md
+   ```
 
 ### Development Commands
 
@@ -140,6 +154,31 @@ If you prefer manual steps:
 5. **Open ports in Security Group:**
    - Port 80 (HTTP) - Frontend
    - Port 3000 (Custom TCP) - Backend API
+   - Port 8001 (Custom TCP) - RedisInsight UI
+
+## 🔌 Port Configuration
+
+All ports are documented in `docker/ports.yml` and `docker/PORTS.md`.
+
+### Quick Port Reference
+
+**Local Development:**
+- Frontend: `3001` → http://localhost:3001
+- Backend: `3000` → http://localhost:3000
+- Redis: `6379` → redis://localhost:6379
+- RedisInsight: `8001` → http://localhost:8001
+
+**Production (AWS):**
+- Frontend: `80` → http://51.21.127.4
+- Backend: `3000` → http://51.21.127.4:3000
+- RedisInsight: `8001` → http://51.21.127.4:8001
+- Redis: Internal only (not exposed)
+
+**View all ports:**
+```bash
+./docker/show-ports.sh
+cat docker/PORTS.md
+```
 
 ## 📊 Database
 

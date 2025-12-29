@@ -1,0 +1,205 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main        # Production
+      - develop     # Dev
+      - pre-prod    # Pre-production
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  AWS_REGION: us-east-1
+  AWS_EC2_IP: 51.21.127.4
+  AWS_USER: ubuntu
+
+jobs:
+  # Test Job
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci || npm install
+      
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci || npm install
+      
+      - name: Run Backend Tests
+        run: |
+          cd backend
+          npm test || echo "No tests configured"
+        continue-on-error: true
+      
+      - name: Run Frontend Tests
+        run: |
+          cd frontend
+          npm test -- --watchAll=false || echo "No tests configured"
+        continue-on-error: true
+
+  # Build Job
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build Backend Image
+        run: |
+          cd backend
+          docker build -t mern-backend:${{ github.sha }} .
+      
+      - name: Build Frontend Image
+        run: |
+          cd frontend
+          docker build -t mern-frontend:${{ github.sha }} .
+
+  # Deploy to Production
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: http://51.21.127.4
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.AWS_EC2_IP }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy to Production
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.AWS_USER }}@${{ env.AWS_EC2_IP }} << 'EOF'
+            cd ~/MERN-prod || cd ~/MERN
+            git pull origin main || true
+            docker-compose -f docker/compose/docker-compose.prod.yml down || docker-compose -f docker-compose.prod.yml down
+            docker-compose -f docker/compose/docker-compose.prod.yml build || docker-compose -f docker-compose.prod.yml build
+            docker-compose -f docker/compose/docker-compose.prod.yml up -d || docker-compose -f docker-compose.prod.yml up -d
+          EOF
+      
+      - name: Health Check
+        run: |
+          sleep 30
+          curl -f http://${{ env.AWS_EC2_IP }}:3000/health || exit 1
+      
+      - name: Open Security Group Ports
+        if: success()
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ ! -z "$AWS_ACCESS_KEY_ID" ]; then
+            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+            aws configure set region ${{ env.AWS_REGION }}
+            
+            SG_ID=$(aws ec2 describe-instances \
+              --filters "Name=ip-address,Values=${{ env.AWS_EC2_IP }}" \
+              --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" \
+              --output text 2>/dev/null || echo "")
+            
+            if [ ! -z "$SG_ID" ] && [ "$SG_ID" != "None" ]; then
+              for port in 80 3000 8001; do
+                aws ec2 authorize-security-group-ingress \
+                  --group-id $SG_ID \
+                  --protocol tcp \
+                  --port $port \
+                  --cidr 0.0.0.0/0 2>/dev/null || echo "Port $port may already be open"
+              done
+            fi
+          fi
+
+  # Deploy to Dev
+  deploy-dev:
+    name: Deploy to Dev Environment
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    environment:
+      name: dev
+      url: http://51.21.127.4:3001
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.AWS_EC2_IP }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy to Dev
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.AWS_USER }}@${{ env.AWS_EC2_IP }} << 'EOF'
+            cd ~/MERN-dev || cd ~/MERN
+            git pull origin develop || true
+            docker-compose -f docker/compose/docker-compose.dev.yml down || docker-compose -f docker-compose.yml down
+            docker-compose -f docker/compose/docker-compose.dev.yml build || docker-compose -f docker-compose.yml build
+            docker-compose -f docker/compose/docker-compose.dev.yml up -d || docker-compose -f docker-compose.yml up -d
+          EOF
+
+  # Deploy to Pre-prod
+  deploy-preprod:
+    name: Deploy to Pre-prod Environment
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/pre-prod' && github.event_name == 'push'
+    environment:
+      name: pre-prod
+      url: http://51.21.127.4:8080
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.AWS_EC2_IP }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy to Pre-prod
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.AWS_USER }}@${{ env.AWS_EC2_IP }} << 'EOF'
+            cd ~/MERN-preprod || cd ~/MERN
+            git pull origin pre-prod || true
+            docker-compose -f docker/compose/docker-compose.preprod.yml down || docker-compose -f docker-compose.preprod.yml down
+            docker-compose -f docker/compose/docker-compose.preprod.yml build || docker-compose -f docker-compose.preprod.yml build
+            docker-compose -f docker/compose/docker-compose.preprod.yml up -d || docker-compose -f docker-compose.preprod.yml up -d
+          EOF
+

@@ -1,0 +1,109 @@
+services:
+  # Redis Cache - Dev Environment
+  redis:
+    image: redis:7-alpine
+    container_name: mern-redis-dev
+    ports:
+      - "6379:6379"
+    networks:
+      - mern-network-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # RedisInsight UI - Dev Environment
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: mern-redisinsight-dev
+    ports:
+      - "8001:5540"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DB_NAME=MERN Redis (Dev)
+    volumes:
+      - redisinsight-data-dev:/data
+      - ../scripts/redisinsight-init.sh:/init.sh:ro
+    networks:
+      - mern-network-dev
+    restart: unless-stopped
+    depends_on:
+      - redis
+    command: sh -c "sh /init.sh & /entrypoint.sh"
+
+  # Backend API - Dev Environment
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: ../docker/dockerfiles/Dockerfile.backend
+    container_name: mern-backend-dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../../.env.dev
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../../backend:/app
+      - /app/node_modules
+    networks:
+      - mern-network-dev
+    depends_on:
+      - redis
+    command: npm run dev
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Frontend React App - Dev Environment
+  frontend:
+    build:
+      context: ../..
+      dockerfile: docker/dockerfiles/Dockerfile.frontend
+      args:
+        - REACT_APP_API_URL=http://51.21.127.4:3000
+    container_name: mern-frontend-dev
+    ports:
+      - "3001:80"
+    environment:
+      - REACT_APP_API_URL=http://51.21.127.4:3000
+    volumes:
+      - ../../frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - mern-network-dev
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+networks:
+  mern-network-dev:
+    driver: bridge
+
+volumes:
+  redisinsight-data-dev:
+

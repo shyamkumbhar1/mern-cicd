@@ -1,0 +1,100 @@
+services:
+  # Redis Cache - Pre-Prod Environment
+  redis:
+    image: redis:7-alpine
+    container_name: mern-redis-preprod
+    ports:
+      - "6380:6379"
+    networks:
+      - mern-network-preprod
+    restart: always
+    command: redis-server --appendonly yes
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # RedisInsight UI - Pre-Prod Environment
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: mern-redisinsight-preprod
+    ports:
+      - "8002:5540"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DB_NAME=MERN Redis (Pre-Prod)
+    volumes:
+      - redisinsight-data-preprod:/data
+      - ../scripts/redisinsight-init.sh:/init.sh:ro
+    networks:
+      - mern-network-preprod
+    restart: always
+    depends_on:
+      - redis
+    command: sh -c "sh /init.sh & /entrypoint.sh"
+
+  # Backend API - Pre-Prod Environment
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: ../docker/dockerfiles/Dockerfile.backend
+    container_name: mern-backend-preprod
+    restart: always
+    ports:
+      - "4000:3000"
+    env_file:
+      - ../../.env.preprod
+    environment:
+      - NODE_ENV=staging
+      - PORT=3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - mern-network-preprod
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: 768M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Frontend React App - Pre-Prod Environment
+  frontend:
+    build:
+      context: ../..
+      dockerfile: docker/dockerfiles/Dockerfile.frontend
+      args:
+        - REACT_APP_API_URL=http://51.21.127.4:4000
+    container_name: mern-frontend-preprod
+    restart: always
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - mern-network-preprod
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+networks:
+  mern-network-preprod:
+    driver: bridge
+
+volumes:
+  redisinsight-data-preprod:
+

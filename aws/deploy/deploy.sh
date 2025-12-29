@@ -1,22 +1,27 @@
 #!/bin/bash
 
-# Your EC2 Details
-PUBLIC_IP="51.21.127.4"
-KEY_FILE="/home/india/shared/solominds/MERN/server-practic.pem"
-PROJECT_PATH="/home/india/shared/solominds/MERN"
+# Load AWS configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/../config.sh"
 
-echo "🚀 Deploying MERN Stack to AWS..."
+# Use config variables
+PUBLIC_IP="$AWS_PUBLIC_IP"
+KEY_FILE="$AWS_KEY_FILE"
+PROJECT_PATH="$AWS_PROJECT_PATH"
+
+# Environment-specific variables for Production
+export ENV="production"
+export AWS_REMOTE_PATH="~/MERN-prod"
+export COMPOSE_FILE="docker/compose/docker-compose.prod.yml"
+export ENV_FILE=".env.production"
+
+echo "🚀 Deploying MERN Stack to AWS - PRODUCTION Environment"
 echo "📍 Instance IP: $PUBLIC_IP"
 echo "📊 Database: basic-crud (MongoDB Atlas)"
+echo "🌍 Environment: Production"
 
 # Check key file exists
-if [ ! -f "$KEY_FILE" ]; then
-  echo "❌ Key file not found: $KEY_FILE"
-  exit 1
-fi
-
-# Set correct permissions for key file
-chmod 400 $KEY_FILE
+check_key_file
 
 # Check if .env.production exists
 if [ ! -f "$PROJECT_PATH/.env.production" ]; then
@@ -31,7 +36,7 @@ echo "📦 Transferring project to server..."
 if command -v rsync &> /dev/null; then
   if ! rsync -avz --exclude='server-practic.pem' --exclude='node_modules' --exclude='.git' \
     -e "ssh -i $KEY_FILE" \
-    $PROJECT_PATH/ ubuntu@$PUBLIC_IP:~/MERN/ 2>&1; then
+    $PROJECT_PATH/ ubuntu@$PUBLIC_IP:$AWS_REMOTE_PATH/ 2>&1; then
     echo "❌ Failed to transfer project to server"
     exit 1
   fi
@@ -42,7 +47,7 @@ else
   cp -r $PROJECT_PATH/.* $TEMP_DIR/ 2>/dev/null || true
   rm -f $TEMP_DIR/server-practic.pem 2>/dev/null || true
   
-  if ! scp -i $KEY_FILE -r $TEMP_DIR ubuntu@$PUBLIC_IP:~/MERN 2>&1; then
+  if ! scp -i $KEY_FILE -r $TEMP_DIR ubuntu@$PUBLIC_IP:$AWS_REMOTE_PATH 2>&1; then
     echo "❌ Failed to transfer project to server"
     rm -rf $TEMP_DIR
     exit 1
@@ -94,26 +99,26 @@ EOF
   
   # Stop existing containers
   echo "🛑 Stopping existing containers..."
-  docker-compose -f docker/docker-compose.prod.yml down 2>/dev/null || true
+  docker-compose -f $COMPOSE_FILE down 2>/dev/null || true
   
   # Build containers
   echo "🏗️  Building containers..."
-  if ! docker-compose -f docker/docker-compose.prod.yml build 2>&1; then
+  if ! docker-compose -f $COMPOSE_FILE build 2>&1; then
     echo ""
     echo "❌ BUILD FAILED!"
     echo "📋 Build errors:"
-    docker-compose -f docker/docker-compose.prod.yml build 2>&1 | tail -30
+    docker-compose -f $COMPOSE_FILE build 2>&1 | tail -30
     exit 1
   fi
   echo "✅ Build successful"
   
   # Start containers
   echo "🚀 Starting containers..."
-  if ! docker-compose -f docker/docker-compose.prod.yml up -d 2>&1; then
+  if ! docker-compose -f $COMPOSE_FILE up -d 2>&1; then
     echo ""
     echo "❌ FAILED TO START CONTAINERS!"
     echo "📋 Container logs:"
-    docker-compose -f docker/docker-compose.prod.yml logs --tail=50
+    docker-compose -f $COMPOSE_FILE logs --tail=50
     exit 1
   fi
   
@@ -124,7 +129,7 @@ EOF
   # Check container status
   echo ""
   echo "📊 Container Status:"
-  docker-compose -f docker/docker-compose.prod.yml ps
+  docker-compose -f $COMPOSE_FILE ps
   
   # Verify containers are running
   BACKEND_RUNNING=$(docker ps --format "{{.Names}}" | grep -c "mern.*backend" || echo "0")
@@ -133,17 +138,17 @@ EOF
   echo ""
   if [ "$BACKEND_RUNNING" -eq "0" ]; then
     echo "❌ Backend container is NOT running!"
-    echo "📋 Backend logs:"
-    docker-compose -f docker/docker-compose.prod.yml logs backend --tail=50
-    exit 1
-  else
-    echo "✅ Backend container is running"
-  fi
-  
-  if [ "$FRONTEND_RUNNING" -eq "0" ]; then
-    echo "❌ Frontend container is NOT running!"
-    echo "📋 Frontend logs:"
-    docker-compose -f docker/docker-compose.prod.yml logs frontend --tail=50
+        echo "📋 Backend logs:"
+        docker-compose -f $COMPOSE_FILE logs backend --tail=50
+        exit 1
+      else
+        echo "✅ Backend container is running"
+      fi
+      
+      if [ "$FRONTEND_RUNNING" -eq "0" ]; then
+        echo "❌ Frontend container is NOT running!"
+        echo "📋 Frontend logs:"
+        docker-compose -f $COMPOSE_FILE logs frontend --tail=50
     exit 1
   else
     echo "✅ Frontend container is running"
@@ -155,7 +160,7 @@ EOF
   sleep 3
   
   # Check MongoDB connection (quick check)
-  BACKEND_LOGS=$(docker-compose -f docker/docker-compose.prod.yml logs backend --tail=20 2>&1)
+  BACKEND_LOGS=$(docker-compose -f $COMPOSE_FILE logs backend --tail=20 2>&1)
   if echo "$BACKEND_LOGS" | grep -q "MongoDB Atlas Connected"; then
     echo "✅ MongoDB connected"
   else
@@ -193,12 +198,12 @@ if [ $DEPLOY_EXIT_CODE -ne 0 ] || [ $DEPLOY_ERROR -eq 1 ]; then
   echo ""
   echo "📋 To debug, run:"
   echo "   ssh -i $KEY_FILE ubuntu@$PUBLIC_IP"
-  echo "   cd ~/MERN"
-  echo "   docker-compose -f docker/docker-compose.prod.yml logs"
+  echo "   cd $AWS_REMOTE_PATH"
+  echo "   docker-compose -f $COMPOSE_FILE logs"
   echo ""
   echo "   Or check specific service:"
-  echo "   docker-compose -f docker/docker-compose.prod.yml logs backend"
-  echo "   docker-compose -f docker/docker-compose.prod.yml logs frontend"
+  echo "   docker-compose -f $COMPOSE_FILE logs backend"
+  echo "   docker-compose -f $COMPOSE_FILE logs frontend"
   echo ""
   exit 1
 fi
@@ -206,25 +211,60 @@ fi
 # Open security group ports
 echo ""
 echo "🔓 Checking security group ports..."
+# Try to find Security Group by instance IP first, then fallback to running instances
 SG_ID=$(aws ec2 describe-instances \
-  --filters "Name=instance-state-name,Values=running" \
+  --filters "Name=ip-address,Values=$PUBLIC_IP" "Name=instance-state-name,Values=running" \
   --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" \
   --output text 2>/dev/null)
 
-if [ ! -z "$SG_ID" ]; then
-  aws ec2 authorize-security-group-ingress \
-    --group-id $SG_ID \
-    --protocol tcp \
-    --port 80 \
-    --cidr 0.0.0.0/0 2>/dev/null && echo "✅ Port 80 opened" || echo "ℹ️  Port 80 already open"
+# Fallback method if first fails
+if [ -z "$SG_ID" ] || [ "$SG_ID" == "None" ]; then
+  SG_ID=$(aws ec2 describe-instances \
+    --filters "Name=instance-state-name,Values=running" \
+    --query "Reservations[0].Instances[0].SecurityGroups[0].GroupId" \
+    --output text 2>/dev/null)
+fi
+
+if [ ! -z "$SG_ID" ] && [ "$SG_ID" != "None" ] && [[ ! "$SG_ID" == *"error"* ]]; then
+  echo "✅ Found Security Group: $SG_ID"
   
-  aws ec2 authorize-security-group-ingress \
-    --group-id $SG_ID \
-    --protocol tcp \
-    --port 3000 \
-    --cidr 0.0.0.0/0 2>/dev/null && echo "✅ Port 3000 opened" || echo "ℹ️  Port 3000 already open"
+  # Function to open port with better error handling
+  open_port() {
+    local port=$1
+    local name=$2
+    
+    # Check if port already exists
+    EXISTING=$(aws ec2 describe-security-groups \
+      --group-ids $SG_ID \
+      --query "SecurityGroups[0].IpPermissions[?FromPort==\`${port}\` && ToPort==\`${port}\`]" \
+      --output json 2>/dev/null)
+    
+    if [ "$EXISTING" != "[]" ] && [ "$EXISTING" != "null" ] && [ ! -z "$EXISTING" ]; then
+      echo "ℹ️  Port ${port} (${name}) already open"
+    else
+      RESULT=$(aws ec2 authorize-security-group-ingress \
+        --group-id $SG_ID \
+        --protocol tcp \
+        --port $port \
+        --cidr 0.0.0.0/0 2>&1)
+      
+      if [ $? -eq 0 ]; then
+        echo "✅ Port ${port} (${name}) opened"
+      elif [[ "$RESULT" == *"already exists"* ]] || [[ "$RESULT" == *"duplicate"* ]]; then
+        echo "ℹ️  Port ${port} (${name}) already exists"
+      else
+        echo "⚠️  Failed to open port ${port}: ${RESULT}"
+      fi
+    fi
+  }
+  
+  open_port 80 "Frontend"
+  open_port 3000 "Backend"
+  open_port 8001 "RedisInsight"
 else
-  echo "⚠️  Could not get security group ID. Please open ports 80 and 3000 manually in AWS Console."
+  echo "⚠️  Could not get security group ID automatically."
+  echo "   Please run: ./aws/fix-security-group.sh"
+  echo "   Or open ports 80, 3000, and 8001 manually in AWS Console."
 fi
 
 echo ""
@@ -235,11 +275,13 @@ echo ""
 echo "🌐 Access your application:"
 echo "   Frontend: http://$PUBLIC_IP"
 echo "   Backend:  http://$PUBLIC_IP:3000"
+echo "   RedisInsight: http://$PUBLIC_IP:8001"
 echo "   Health:   http://$PUBLIC_IP:3000/health"
 echo ""
 echo "📊 Database: basic-crud (MongoDB Atlas)"
 echo ""
 echo "📝 Useful commands:"
-echo "   View logs: ssh -i $KEY_FILE ubuntu@$PUBLIC_IP 'cd ~/MERN && docker-compose -f docker/docker-compose.prod.yml logs'"
-echo "   Restart:   ssh -i $KEY_FILE ubuntu@$PUBLIC_IP 'cd ~/MERN && docker-compose -f docker/docker-compose.prod.yml restart'"
+echo "   View logs: ssh -i $KEY_FILE ubuntu@$PUBLIC_IP 'cd $AWS_REMOTE_PATH && docker-compose -f $COMPOSE_FILE logs'"
+echo "   Restart:   ssh -i $KEY_FILE ubuntu@$PUBLIC_IP 'cd $AWS_REMOTE_PATH && docker-compose -f $COMPOSE_FILE restart'"
 echo ""
+

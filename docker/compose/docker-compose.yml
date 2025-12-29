@@ -1,0 +1,83 @@
+services:
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: mern-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - mern-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  # RedisInsight UI
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: mern-redisinsight
+    ports:
+      - "8001:5540"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DB_NAME=MERN Redis
+    volumes:
+      - redisinsight-data:/data
+      - ../scripts/redisinsight-init.sh:/init.sh:ro
+    networks:
+      - mern-network
+    restart: unless-stopped
+    depends_on:
+      - redis
+    command: sh -c "sh /init.sh & /entrypoint.sh"
+
+  # Backend API
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: ../docker/dockerfiles/Dockerfile.backend
+    container_name: mern-backend
+    ports:
+      - "3000:3000"
+    env_file:
+      - ../../.env
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ../../backend:/app
+      - /app/node_modules
+    networks:
+      - mern-network
+    depends_on:
+      - redis
+    command: npm run dev
+    restart: unless-stopped
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ../..
+      dockerfile: docker/dockerfiles/Dockerfile.frontend
+    container_name: mern-frontend
+    ports:
+      - "3001:80"
+    environment:
+      - REACT_APP_API_URL=http://localhost:3000
+    volumes:
+      - ../../frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - mern-network
+    restart: unless-stopped
+
+networks:
+  mern-network:
+    driver: bridge
+
+volumes:
+  redisinsight-data:
+
