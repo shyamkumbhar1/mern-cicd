@@ -69,13 +69,11 @@ jobs:
       
       - name: Build Backend Image
         run: |
-          cd backend
-          docker build -t mern-backend:${{ github.sha }} .
+          docker build -f docker/dockerfiles/Dockerfile.backend -t mern-backend:${{ github.sha }} backend/
       
       - name: Build Frontend Image
         run: |
-          cd frontend
-          docker build -t mern-frontend:${{ github.sha }} .
+          docker build -f docker/dockerfiles/Dockerfile.frontend -t mern-frontend:${{ github.sha }} .
 
   # Deploy to Production
   deploy-prod:
