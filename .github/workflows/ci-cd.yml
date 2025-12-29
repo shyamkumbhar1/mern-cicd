@@ -145,8 +145,26 @@ jobs:
       
       - name: Health Check
         run: |
-          sleep 30
-          curl -f http://${{ env.AWS_EC2_IP }}:3000/health || exit 1
+          echo "⏳ Waiting for backend to be ready (60 seconds)..."
+          sleep 60
+          
+          echo "🔍 Checking backend health..."
+          MAX_RETRIES=5
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if curl -f -s --max-time 10 http://${{ env.AWS_EC2_IP }}:3000/health > /dev/null 2>&1; then
+              echo "✅ Backend health check passed!"
+              exit 0
+            fi
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "⏳ Retry $RETRY_COUNT/$MAX_RETRIES - Backend not ready yet, waiting 10 seconds..."
+            sleep 10
+          done
+          
+          echo "⚠️  Health check failed after $MAX_RETRIES retries"
+          echo "💡 Backend might still be starting. Check manually: http://${{ env.AWS_EC2_IP }}:3000/health"
+          exit 1
       
       - name: Open Security Group Ports
         if: success()
