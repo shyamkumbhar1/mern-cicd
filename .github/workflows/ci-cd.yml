@@ -114,6 +114,9 @@ jobs:
             else
               cd ~/MERN-prod
               echo "🔄 Pulling latest changes..."
+              # Reset any local changes and pull latest
+              git reset --hard HEAD || true
+              git clean -fd || true
               git pull origin main || true
             fi
             
