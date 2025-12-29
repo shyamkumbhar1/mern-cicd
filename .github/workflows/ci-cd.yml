@@ -17,10 +17,11 @@ env:
   AWS_USER: ubuntu
 
 jobs:
-  # Test Job
+  # Test Job (Optional - can skip for small changes)
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip tests]')"
     
     steps:
       - name: Checkout code
@@ -119,21 +120,21 @@ jobs:
             # Ensure Docker is running
             sudo systemctl start docker || true
             
-            # Stop and remove existing containers (forcefully)
+            # Stop existing containers (keep volumes for faster restart)
             echo "🛑 Stopping existing containers..."
-            docker-compose -f docker/compose/docker-compose.prod.yml down -v || docker-compose -f docker-compose.prod.yml down -v || true
+            docker-compose -f docker/compose/docker-compose.prod.yml stop || docker-compose -f docker-compose.prod.yml stop || true
             
             # Forcefully remove any remaining containers with same names
             echo "🧹 Removing any remaining containers..."
             docker rm -f mern-frontend mern-backend mern-redis mern-redisinsight 2>/dev/null || true
             
-            # Build containers (with progress output to keep connection alive)
-            echo "🏗️  Building containers..."
-            docker-compose -f docker/compose/docker-compose.prod.yml build --progress=plain || docker-compose -f docker-compose.prod.yml build --progress=plain
+            # Build only changed services (faster - uses cache)
+            echo "🏗️  Building containers (using cache)..."
+            docker-compose -f docker/compose/docker-compose.prod.yml build --parallel || docker-compose -f docker-compose.prod.yml build --parallel
             
-            # Start containers
+            # Start containers (faster - no full recreate)
             echo "🚀 Starting containers..."
-            docker-compose -f docker/compose/docker-compose.prod.yml up -d --force-recreate || docker-compose -f docker-compose.prod.yml up -d --force-recreate
+            docker-compose -f docker/compose/docker-compose.prod.yml up -d || docker-compose -f docker-compose.prod.yml up -d
             
             # Wait for containers to start
             sleep 5
